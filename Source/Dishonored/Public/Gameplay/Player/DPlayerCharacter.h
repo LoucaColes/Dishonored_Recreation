@@ -42,8 +42,17 @@ class DISHONORED_API ADPlayerCharacter : public ACharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* CrouchAction;
 
-	/*UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
-	bool bIsCrouched;*/
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* SprintAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
+	bool bIsSprinting;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
+	float walkSpeed;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
+	float sprintSpeed;
 
 public:
 	// Sets default values for this character's properties
@@ -60,6 +69,9 @@ protected:
 	void Look(const FInputActionValue& Value);
 
 	void ToggleCrouch();
+
+	void StartSprinting();
+	void StopSprinting();
 
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;

@@ -10,6 +10,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "Engine/LocalPlayer.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
 ADPlayerCharacter::ADPlayerCharacter()
@@ -35,15 +36,18 @@ ADPlayerCharacter::ADPlayerCharacter()
 	//Mesh1P->SetRelativeRotation(FRotator(0.9f, -19.19f, 5.2f));
 	Mesh1P->SetRelativeLocation(FVector(-30.f, 0.f, -150.f));
 
-	bIsCrouched = false;
-	
+	bIsSprinting = false;
+	walkSpeed = 600;
+	sprintSpeed = 900;
 }
 
 // Called when the game starts or when spawned
 void ADPlayerCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-	
+
+	UCharacterMovementComponent* CharacterMovementComp = GetCharacterMovement();
+	CharacterMovementComp->MaxWalkSpeed = walkSpeed;
 }
 
 void ADPlayerCharacter::Move(const FInputActionValue& Value)
@@ -84,6 +88,18 @@ void ADPlayerCharacter::ToggleCrouch()
 	}
 }
 
+void ADPlayerCharacter::StartSprinting()
+{
+	UCharacterMovementComponent* CharacterMovementComp = GetCharacterMovement();
+	CharacterMovementComp->MaxWalkSpeed = sprintSpeed;
+}
+
+void ADPlayerCharacter::StopSprinting()
+{
+	UCharacterMovementComponent* CharacterMovementComp = GetCharacterMovement();
+	CharacterMovementComp->MaxWalkSpeed = walkSpeed;
+}
+
 // Called every frame
 void ADPlayerCharacter::Tick(float DeltaTime)
 {
@@ -108,6 +124,8 @@ void ADPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ADPlayerCharacter::Look);
 
 		EnhancedInputComponent->BindAction(CrouchAction, ETriggerEvent::Started, this, &ADPlayerCharacter::ToggleCrouch);
+		EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Started, this, &ADPlayerCharacter::StartSprinting);
+		EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Completed, this, &ADPlayerCharacter::StopSprinting);
 	}
 	else
 	{
