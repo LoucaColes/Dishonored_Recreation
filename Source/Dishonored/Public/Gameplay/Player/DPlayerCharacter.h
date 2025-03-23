@@ -13,6 +13,8 @@ class UInputAction;
 class UInputMappingContext;
 struct FInputActionValue;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCrouchChangedSignature, bool, isCrouching);
+
 UCLASS()
 class DISHONORED_API ADPlayerCharacter : public ACharacter
 {
@@ -84,4 +86,7 @@ public:
 	USkeletalMeshComponent* GetMesh1P() const { return Mesh1P; }
 	/** Returns FirstPersonCameraComponent subobject **/
 	UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCameraComponent; }
+
+	UPROPERTY(BlueprintAssignable)
+	FOnCrouchChangedSignature OnCrouchChangedDelegate;
 };

@@ -81,10 +81,12 @@ void ADPlayerCharacter::ToggleCrouch()
 	if (!bIsCrouched)
 	{
 		Crouch();
+		OnCrouchChangedDelegate.Broadcast(true);
 	}
 	else
 	{
 		UnCrouch();
+		OnCrouchChangedDelegate.Broadcast(false);
 	}
 }
 
