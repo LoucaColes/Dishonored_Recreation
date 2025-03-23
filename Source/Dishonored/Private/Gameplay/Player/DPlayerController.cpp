@@ -4,6 +4,7 @@
 #include "Gameplay/Player/DPlayerController.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
+#include "Blueprint/UserWidget.h"
 
 void ADPlayerController::BeginPlay()
 {
@@ -15,4 +16,8 @@ void ADPlayerController::BeginPlay()
 		// add the mapping context so we get controls
 		Subsystem->AddMappingContext(InputMappingContext, 0);
 	}
+
+	HUD = CreateWidget<UUserWidget>(this, HUDClass);
+
+	HUD->AddToViewport();
 }
