@@ -10,6 +10,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "Engine/LocalPlayer.h"
+#include "Components/TimelineComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
@@ -48,6 +49,17 @@ void ADPlayerCharacter::BeginPlay()
 
 	UCharacterMovementComponent* CharacterMovementComp = GetCharacterMovement();
 	CharacterMovementComp->MaxWalkSpeed = walkSpeed;
+	
+	if (CameraTiltCurve)
+	{
+		FOnTimelineFloat TimelineCallback;
+		FOnTimelineEventStatic TimelineFinishedCallback;
+
+		TimelineCallback.BindUFunction(this, FName("TiltCamera"));
+		TimelineFinishedCallback.BindUFunction(this, FName{ TEXT("TiltCameraFinished") });
+		CameraTiltTimeline.AddInterpFloat(CameraTiltCurve, TimelineCallback);
+		CameraTiltTimeline.SetTimelineFinishedFunc(TimelineFinishedCallback);
+	}
 }
 
 void ADPlayerCharacter::Move(const FInputActionValue& Value)
@@ -76,6 +88,22 @@ void ADPlayerCharacter::Look(const FInputActionValue& Value)
 	}
 }
 
+void ADPlayerCharacter::DetermineCrouchOrSlide()
+{
+	// Check if we are falling and if so do nothing
+	if (GetMovementComponent()->IsFalling()) { return;}
+
+	// Check if we are sprinting to decide whether to crouch or not
+	if (!bIsSprinting)
+	{
+		ToggleCrouch();
+	}
+	else
+	{
+		StartSliding();
+	}
+}
+
 void ADPlayerCharacter::ToggleCrouch()
 {
 	if (!bIsCrouched)
@@ -90,14 +118,21 @@ void ADPlayerCharacter::ToggleCrouch()
 	}
 }
 
+void ADPlayerCharacter::StartSliding()
+{
+	CameraTiltTimeline.Play();
+}
+
 void ADPlayerCharacter::StartSprinting()
 {
+	bIsSprinting = true;
 	UCharacterMovementComponent* CharacterMovementComp = GetCharacterMovement();
 	CharacterMovementComp->MaxWalkSpeed = sprintSpeed;
 }
 
 void ADPlayerCharacter::StopSprinting()
 {
+	bIsSprinting = false;
 	UCharacterMovementComponent* CharacterMovementComp = GetCharacterMovement();
 	CharacterMovementComp->MaxWalkSpeed = walkSpeed;
 }
@@ -107,6 +142,7 @@ void ADPlayerCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	CameraTiltTimeline.TickTimeline(DeltaTime);
 }
 
 // Called to bind functionality to input
@@ -125,7 +161,7 @@ void ADPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ADPlayerCharacter::Look);
 
-		EnhancedInputComponent->BindAction(CrouchAction, ETriggerEvent::Started, this, &ADPlayerCharacter::ToggleCrouch);
+		EnhancedInputComponent->BindAction(CrouchAction, ETriggerEvent::Started, this, &ADPlayerCharacter::DetermineCrouchOrSlide);
 		EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Started, this, &ADPlayerCharacter::StartSprinting);
 		EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Completed, this, &ADPlayerCharacter::StopSprinting);
 	}
@@ -136,3 +172,17 @@ void ADPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 
 }
 
+void ADPlayerCharacter::TiltCamera()
+{
+	float TimelineValue = CameraTiltTimeline.GetPlaybackPosition();
+	float CurveFloatValue = CameraTiltCurve->GetFloatValue(TimelineValue);
+
+	FRotator CurrentRotation = GetController()->GetControlRotation();
+	FRotator NewRotation = FRotator(CurveFloatValue, CurrentRotation.Pitch, CurrentRotation.Yaw);
+	GetController()->SetControlRotation(NewRotation);
+}
+
+void ADPlayerCharacter::TiltCameraFinished()
+{
+	//if (CameraTiltTimeline.GetTimelineDirectionEnum() == 
+}

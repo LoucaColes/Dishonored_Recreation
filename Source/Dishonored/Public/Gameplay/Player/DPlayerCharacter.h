@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Components/TimelineComponent.h"
 #include "DPlayerCharacter.generated.h"
 
 class UInputComponent;
@@ -12,6 +13,8 @@ class UCameraComponent;
 class UInputAction;
 class UInputMappingContext;
 struct FInputActionValue;
+class UTimelineComponent;
+class FOnTimelineEvent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCrouchChangedSignature, bool, isCrouching);
 
@@ -56,6 +59,11 @@ class DISHONORED_API ADPlayerCharacter : public ACharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
 	float sprintSpeed;
 
+	FTimeline CameraTiltTimeline;
+
+	UPROPERTY(EditAnywhere)
+	UCurveFloat* CameraTiltCurve;
+
 public:
 	// Sets default values for this character's properties
 	ADPlayerCharacter();
@@ -70,7 +78,9 @@ protected:
 	/** Called for looking input */
 	void Look(const FInputActionValue& Value);
 
+	void DetermineCrouchOrSlide();
 	void ToggleCrouch();
+	void StartSliding();
 
 	void StartSprinting();
 	void StopSprinting();
@@ -80,6 +90,12 @@ protected:
 
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+	UFUNCTION()
+	void TiltCamera();
+
+	UFUNCTION()
+	void TiltCameraFinished();
 
 public:	
 	/** Returns Mesh1P subobject **/
