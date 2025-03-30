@@ -53,88 +53,25 @@ void ADPlayerCharacter::BeginPlay()
 	if (CameraTiltCurve)
 	{
 		FOnTimelineFloat TimelineCallback;
-		FOnTimelineEventStatic TimelineFinishedCallback;
 
 		TimelineCallback.BindUFunction(this, FName("TiltCamera"));
-		TimelineFinishedCallback.BindUFunction(this, FName{ TEXT("TiltCameraFinished") });
 		CameraTiltTimeline.AddInterpFloat(CameraTiltCurve, TimelineCallback);
-		CameraTiltTimeline.SetTimelineFinishedFunc(TimelineFinishedCallback);
 	}
-}
 
-void ADPlayerCharacter::Move(const FInputActionValue& Value)
-{
-	// input is a Vector2D
-	FVector2D MovementVector = Value.Get<FVector2D>();
+	StandingHalfHeight = GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	MovementState = EMovementState::Walk;
+	StandingZOffset = GetFirstPersonCameraComponent()->GetRelativeLocation().Z;
 
-	if (Controller != nullptr)
+	if (SlideCurve)
 	{
-		// add movement 
-		AddMovementInput(GetActorForwardVector(), MovementVector.Y);
-		AddMovementInput(GetActorRightVector(), MovementVector.X);
+		FOnTimelineFloat TimelineCallback;
+		FOnTimelineEventStatic TimelineFinishedCallback;
+
+		TimelineCallback.BindUFunction(this, FName("SlidePlayer"));
+		TimelineFinishedCallback.BindUFunction(this, FName("StopSliding"));
+		SlideTimeline.AddInterpFloat(SlideCurve, TimelineCallback);
+		SlideTimeline.SetTimelineFinishedFunc(TimelineFinishedCallback);
 	}
-}
-
-void ADPlayerCharacter::Look(const FInputActionValue& Value)
-{
-	// input is a Vector2D
-	FVector2D LookAxisVector = Value.Get<FVector2D>();
-
-	if (Controller != nullptr)
-	{
-		// add yaw and pitch input to controller
-		AddControllerYawInput(LookAxisVector.X);
-		AddControllerPitchInput(LookAxisVector.Y);
-	}
-}
-
-void ADPlayerCharacter::DetermineCrouchOrSlide()
-{
-	// Check if we are falling and if so do nothing
-	if (GetMovementComponent()->IsFalling()) { return;}
-
-	// Check if we are sprinting to decide whether to crouch or not
-	if (!bIsSprinting)
-	{
-		ToggleCrouch();
-	}
-	else
-	{
-		StartSliding();
-	}
-}
-
-void ADPlayerCharacter::ToggleCrouch()
-{
-	if (!bIsCrouched)
-	{
-		Crouch();
-		OnCrouchChangedDelegate.Broadcast(true);
-	}
-	else
-	{
-		UnCrouch();
-		OnCrouchChangedDelegate.Broadcast(false);
-	}
-}
-
-void ADPlayerCharacter::StartSliding()
-{
-	CameraTiltTimeline.Play();
-}
-
-void ADPlayerCharacter::StartSprinting()
-{
-	bIsSprinting = true;
-	UCharacterMovementComponent* CharacterMovementComp = GetCharacterMovement();
-	CharacterMovementComp->MaxWalkSpeed = sprintSpeed;
-}
-
-void ADPlayerCharacter::StopSprinting()
-{
-	bIsSprinting = false;
-	UCharacterMovementComponent* CharacterMovementComp = GetCharacterMovement();
-	CharacterMovementComp->MaxWalkSpeed = walkSpeed;
 }
 
 // Called every frame
@@ -143,6 +80,7 @@ void ADPlayerCharacter::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	CameraTiltTimeline.TickTimeline(DeltaTime);
+	SlideTimeline.TickTimeline(DeltaTime);
 }
 
 // Called to bind functionality to input
@@ -172,17 +110,130 @@ void ADPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 
 }
 
+void ADPlayerCharacter::Move(const FInputActionValue& Value)
+{
+	// input is a Vector2D
+	FVector2D MovementVector = Value.Get<FVector2D>();
+
+	if (Controller != nullptr && ShouldConsiderMoveInput())
+	{
+		// add movement 
+		AddMovementInput(GetActorForwardVector(), MovementVector.Y);
+		AddMovementInput(GetActorRightVector(), MovementVector.X);
+	}
+}
+
+void ADPlayerCharacter::Look(const FInputActionValue& Value)
+{
+	// input is a Vector2D
+	FVector2D LookAxisVector = Value.Get<FVector2D>();
+
+	if (Controller != nullptr)
+	{
+		// add yaw and pitch input to controller
+		AddControllerYawInput(LookAxisVector.X);
+		AddControllerPitchInput(LookAxisVector.Y);
+	}
+}
+
+void ADPlayerCharacter::DetermineCrouchOrSlide()
+{
+	// Check if we are falling and if so do nothing
+	if (GetMovementComponent()->IsFalling()) { return;}
+
+	// Check if we are sprinting to decide whether to crouch or not
+	if (MovementState != EMovementState::Sprint)
+	{
+		ToggleCrouch();
+	}
+	else
+	{
+		StartSliding();
+	}
+}
+
+void ADPlayerCharacter::ToggleCrouch()
+{
+	if (!bIsCrouched)
+	{
+		MovementState = EMovementState::Crouch;
+		Crouch();
+		OnCrouchChangedDelegate.Broadcast(true);
+	}
+	else
+	{
+		MovementState = EMovementState::Walk;
+		UnCrouch();
+		OnCrouchChangedDelegate.Broadcast(false);
+	}
+}
+
+void ADPlayerCharacter::StartSliding()
+{
+	CameraTiltTimeline.Play();
+	SlideTimeline.PlayFromStart();
+}
+
+void ADPlayerCharacter::StopSliding()
+{
+	CameraTiltTimeline.Reverse();
+	SlideTimeline.Stop();
+	GetCharacterMovement()->MaxWalkSpeed = walkSpeed;
+}
+
+void ADPlayerCharacter::StartSprinting()
+{
+	MovementState = EMovementState::Sprint;
+	UCharacterMovementComponent* CharacterMovementComp = GetCharacterMovement();
+	CharacterMovementComp->MaxWalkSpeed = sprintSpeed;
+}
+
+void ADPlayerCharacter::StopSprinting()
+{
+	MovementState = EMovementState::Walk;
+	UCharacterMovementComponent* CharacterMovementComp = GetCharacterMovement();
+	CharacterMovementComp->MaxWalkSpeed = walkSpeed;
+}
+
 void ADPlayerCharacter::TiltCamera()
 {
 	float TimelineValue = CameraTiltTimeline.GetPlaybackPosition();
 	float CurveFloatValue = CameraTiltCurve->GetFloatValue(TimelineValue);
 
 	FRotator CurrentRotation = GetController()->GetControlRotation();
-	FRotator NewRotation = FRotator(CurveFloatValue, CurrentRotation.Pitch, CurrentRotation.Yaw);
+	FRotator NewRotation = FRotator(CurrentRotation.Pitch, CurrentRotation.Yaw, CurveFloatValue);
 	GetController()->SetControlRotation(NewRotation);
 }
 
-void ADPlayerCharacter::TiltCameraFinished()
+void ADPlayerCharacter::SlidePlayer()
 {
-	//if (CameraTiltTimeline.GetTimelineDirectionEnum() == 
+	float TimelineValue = SlideTimeline.GetPlaybackPosition();
+	float CurveFloatValue = SlideCurve->GetFloatValue(TimelineValue);
+
+	// Calculate Half Height
+	float HalfHeight = FMath::GetMappedRangeValueClamped(FVector2D(0.f, 1.f), FVector2D(StandingHalfHeight, SlideHalfHeight), CurveFloatValue);
+	GetCapsuleComponent()->SetCapsuleHalfHeight(HalfHeight);
+
+	// Calculate Z Offset
+	FVector CurrentLocation = GetFirstPersonCameraComponent()->GetRelativeLocation();
+	float ZOffset = FMath::GetMappedRangeValueClamped(FVector2D(0.f, 1.f), FVector2D(StandingZOffset, SlideZOffset), CurveFloatValue);
+	FVector UpdatedLocation = FVector(CurrentLocation.X, CurrentLocation.Y, ZOffset);
+
+	FVector FloorNormal = GetCharacterMovement()->CurrentFloor.HitResult.Normal;
+	FVector FloorInfluence = FVector::ZeroVector;
+	if (FloorNormal != FVector::UpVector)
+	{
+		FVector Cross = FVector::CrossProduct(FloorNormal, FVector::UpVector);
+		FVector SecondCross = FVector::CrossProduct(FloorNormal, Cross);
+		SecondCross.Normalize();
+		FloorInfluence = SecondCross;
+	}
+
+	GetCharacterMovement()->AddForce(FloorInfluence * 150000.f);
+	GetCharacterMovement()->Velocity = GetActorForwardVector() * sprintSpeed;
+}
+
+bool ADPlayerCharacter::ShouldConsiderMoveInput()
+{
+	return MovementState != EMovementState::Slide;
 }
